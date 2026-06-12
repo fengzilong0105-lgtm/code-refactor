@@ -37,11 +37,13 @@
 
 **注意**：明文密码只做外置/占位，不写进文档、commit message 或 skill 文件。
 
-## 4. 重复代码
+## 4. 重复代码（批次 3）
 
-**识别**：相同字符串处理、分页样板、参数校验、Consumer/Handler 反序列化骨架重复。
+**识别**：相同字符串处理、分页样板、参数校验、Consumer/Handler 反序列化骨架重复；**机械复制粘贴**（≥2 处、片段相近）。
 
-**处理**：Extract Method → 工具类 → AOP；校验优先 Bean Validation。
+**处理**：Extract Method → 域内 util → AOP；校验优先 Bean Validation。见 conventions.md §5。
+
+**与批 9 区别**：批 3 处理「一眼能看出的重复」；批 9 在拆类、重命名后做跨类公共能力与控制流整理。
 
 ## 5. 职责错位
 
@@ -121,6 +123,22 @@ rg "void\s+(test|temp|fun)\d*\s*\(" --glob "*.java" {JAVA_ROOT}/{DOMAIN}
 3. 批次 4：C 类硬编码外置
 4. 批次 7：大 Service 拆分
 
+## 11. 复杂逻辑 / 循环与判断（批次 9）
+
+**识别**（在批 3、7 完成后扫描）：
+
+| 类型 | 信号 |
+|------|------|
+| 长方法 | 单方法 >50 行，或含查询+转换+副作用 |
+| 深嵌套 | if/for 嵌套 ≥3 层 |
+| 循环内查找 | `for` 内对同一 List 反复 `stream().filter` |
+| 布尔泥团 | 长链 `&&`/`\\|\\|` 无命名 |
+| 跨类重复 | 批 3 未覆盖的域内公共片段 |
+
+**处理**：见 [batch9-reuse-playbook.md](batch9-reuse-playbook.md) 子任务 9.1～9.3。
+
+**禁止**：改变排序/去重语义、未经确认的 parallelStream、算法级「优化」。
+
 ## 输出格式：《重构清单》模板
 
 ```markdown
@@ -153,11 +171,16 @@ rg "void\s+(test|temp|fun)\d*\s*\(" --glob "*.java" {JAVA_ROOT}/{DOMAIN}
 ## 八、语义命名 / 格式问题
 | # | 类 | 方法/成员 | 问题 | 建议新名 |
 
+## 九、复用与逻辑优化（批次 9，域内最后）
+| # | 子任务 | 类/方法 | 问题类型 | 建议处理 |
+|    | 9.1/9.2/9.3 | | 跨类重复/长方法/深嵌套/循环内查找 | |
+
 ## 建议执行计划
 - 范围：{用户选择的域}
 - 域顺序：{按 domain-taxonomy.md 五类顺序填写实际包名，如 integration → order → report}
-- 每域批次：1→2→4→6→5→8→(3/7)
+- 每域批次：1→2→4→6→5→8→3→7→9
 - 对应清单项编号：...
+- **纪律**：一单元一批次；开批前填写「本批待办文件表」（见 templates/REFACTOR_PROGRESS.md）
 ```
 
 阶段一还需在项目根创建 `REFACTOR_PROGRESS.md`（见 templates/REFACTOR_PROGRESS.md）。

@@ -169,11 +169,27 @@ public class PartnerApiProperties {
 
 外置配置时，有几个 profile 就同步改几个，缺省值放主 `application.yml`。
 
-## 5. 重复代码
+## 5. 重复代码与公共复用（批 3 与批 9）
 
-- 同一段逻辑出现 ≥ 2 次即抽取：Extract Method → 工具类 → AOP。
+### 5.1 批次 3：机械重复
+
+- 同一段逻辑出现 ≥ 2 次即抽取：Extract Method → 域内 util → AOP。
 - 抽取后的工具方法必须有 Javadoc，放在所属域的 `util/` 或 `common/util/`。
 - Controller 中重复的参数校验，优先 Bean Validation（`@NotNull` + `@Validated`）。
+
+### 5.2 批次 9：深度复用与控制流（域内最后）
+
+在分层、拆类、命名完成后执行，详见 [batch9-reuse-playbook.md](batch9-reuse-playbook.md)。
+
+| 原则 | 说明 |
+|------|------|
+| 先方法后类 | 优先 Extract Method，再考虑 support 类 |
+| 放置边界 | 单域 → `{域}/util/`；多域 → `common/util/`（查循环依赖） |
+| 控制流 | 用 Guard Clause、谓词方法、合并遍历减少嵌套 |
+| 行为不变 | 不改变排序、过滤语义；算法级优化须用户确认 |
+| 粒度 | 不为 <5 行创建新 util 类 |
+
+长方法目标：主流程读起来像步骤列表，单方法建议控制在 **≤50 行**（复杂 SQL 拼装等例外须注释说明）。
 
 ## 6. 命名规范（类 / 方法 / 参数）
 

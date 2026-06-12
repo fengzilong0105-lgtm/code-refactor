@@ -213,6 +213,62 @@ Get-ChildItem -Recurse -Filter "*.java" {JAVA_ROOT}/{DOMAIN} |
 
 ---
 
+## 批次 3：机械重复代码
+
+### 3.1 高度相似方法体（抽样）
+
+对《重构清单》「三、重复代码」所列文件人工核对；或用 IDE 重复检测。
+
+**通过标准**：清单项已抽取或登记「本域无重复」。
+
+---
+
+## 批次 9：公共复用与逻辑优化
+
+详见 [batch9-reuse-playbook.md](batch9-reuse-playbook.md)。子任务 9.1 / 9.2 / 9.3 **分单元**验收。
+
+### 9.1 跨类重复私有逻辑（抽样）
+
+对《重构清单》「九、复用与逻辑优化」中 9.1 项人工核对：相同逻辑是否已收敛到 util/support。
+
+**通过标准**：本单元计划项已合并；无新增跨域 util 循环依赖。
+
+### 9.2 超长方法
+
+```bash
+# PowerShell：列出本域业务类中方法行数热点（人工抽查 >50 行）
+Get-ChildItem -Recurse -Filter "*.java" {JAVA_ROOT}/{DOMAIN} |
+  Where-Object { $_.Name -notmatch "Example" } |
+  ForEach-Object { $_.FullName }
+```
+
+**通过标准**：本单元目标方法行数较单元基线下降；主流程方法可读为「步骤调用」。
+
+### 9.3 深嵌套控制流
+
+```bash
+# 启发式：连续缩进层级过深（需人工排除合法 switch/try）
+rg "^\s{20,}(if|for|while)\s" --glob "*.java" {JAVA_ROOT}/{DOMAIN}/**/service/**/*.java"
+```
+
+**通过标准**：本单元目标文件中深嵌套处已减少（Guard Clause / 谓词方法 / 合并遍历）；**行为不变**（编译 + 既有测试通过）。
+
+### 9.4 循环内重复 stream 查找（抽样）
+
+```bash
+rg "for\s*\([^)]+\)\s*\{[^}]*\.stream\(\)" --glob "*.java" {JAVA_ROOT}/{DOMAIN}
+```
+
+**通过标准**：本单元计划项已改为预分组或单次遍历，或登记「语义不宜合并」。
+
+### 9.5 批 9 无需求确认
+
+若 9.1～9.4 扫描无待办且上帝类已拆：
+
+- 在 `REFACTOR_PROGRESS.md` 批 9 标 ⏭，注明「门禁扫描日期 + 无热点」。
+
+---
+
 ## 阶段三：全项目符合度扫描
 
 收尾时在全 `{JAVA_ROOT}` 执行：
@@ -224,6 +280,8 @@ Get-ChildItem -Recurse -Filter "*.java" {JAVA_ROOT}/{DOMAIN} |
 | 硬编码 URL 总数 | `rg "https?://\d" --glob "*.java" {JAVA_ROOT}` |
 | Controller 注 Mapper | `rg "Mapper" --glob "**/controller/**/*.java" {JAVA_ROOT}` |
 | 模糊方法名残留 | `rg "\b(do|handle|process|getData)\s*\(" --glob "**/{controller,service,mapper}/**/*.java" {JAVA_ROOT}` |
+| 业务类 >400 行 Top10 | 见批次 7 行数统计 |
+| 深嵌套 if/for（>5 层缩进） | `rg "^\s{24,}(if|for|while)\s" --glob "**/service/**/*.java" {JAVA_ROOT}` |
 
 结果填入 [templates/refactor-report.md](templates/refactor-report.md)。
 

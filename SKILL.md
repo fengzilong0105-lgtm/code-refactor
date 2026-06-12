@@ -5,8 +5,10 @@ description: >-
   remove dead code, eliminate hardcoded values, extract duplicated logic, split god
   classes, enforce controller/service/serviceImpl layering, normalize Javadoc comments,
   optimize method semantics and naming, apply code formatting standards,
-  and reorganize packages by business domain. Use when the user mentions refactoring,
+  reorganize packages by business domain, and at the end extract shared code,
+  split complex logic for reuse, and simplify loops and conditionals. Use when the user mentions refactoring,
   重构, 代码清理, 拆分服务, 消除硬编码, 删除死代码, 目录重组, 命名规范, 方法重命名, 语义优化,
+  公共代码提取, 重复代码, 循环优化, 复杂逻辑拆分, 控制流优化,
   or asks to clean up / restructure existing code without changing behavior.
 ---
 
@@ -62,8 +64,16 @@ description: >-
 除非用户明确要求「全项目只做某一批次」，否则**按业务域逐个完成**，域内批次顺序：
 
 ```
-批次1(死代码登记) → 批次2(注释) → 批次4(硬编码) → 批次6(目录) → 批次5(分层+Swagger) → 批次8(语义命名+格式) → 批次3/7(重复代码/拆上帝类)
+批次1(死代码登记) → 批次2(注释) → 批次4(硬编码) → 批次6(目录) → 批次5(分层+Swagger) → 批次8(语义命名+格式) → 批次3(重复片段) → 批次7(拆上帝类) → 批次9(公共复用与逻辑优化)
 ```
+
+#### 执行纪律（防混乱）
+
+1. **一单元一批次**：`REFACTOR_PROGRESS.md` 单元标题必须写清 `{域名}-批{N}`；禁止在同一单元混做批 4+5+6 等。
+2. **开批前列清单**：进入批 N 前，在本域《重构清单》或进度文件列出**本批待办文件表**（文件 + 问题类型）；做完一项勾一项。
+3. **🔄 与 ✅ 区分**：某批有成果但门禁未过 → 标 🔄，在「批次明细」写已完成/未完成；门禁通过后才标 ✅。
+4. **跳批须注明**：用户要求调整顺序时，在「当前阻塞」记录原因，不得静默跳批。
+5. **批 9 最后做**：结构、命名稳定后再做公共提取与循环优化，见 [batch9-reuse-playbook.md](batch9-reuse-playbook.md)。
 
 **推荐域顺序**（按类别，非固定包名）：D 类（配置归类）→ C 类（集成/外发）→ 体量小且依赖少的 A 类核心域 → 其余 A 类域 → B 类聚合域。具体包名与顺序在阶段一《业务域地图》中据项目实际填写，见 [domain-taxonomy.md](domain-taxonomy.md)。
 
@@ -79,12 +89,13 @@ description: >-
 |------|------|------|
 | 1 | 登记死代码清单（只登记不删除） | 无 |
 | 2 | 注释规范化：类/方法/字段注释改为 Javadoc | 极低 |
-| 3 | 提取重复代码为工具方法/公共方法 | 低 |
+| 3 | 提取机械重复片段（复制粘贴级）为方法/小 util | 低 |
 | 4 | 硬编码外置：URL/IP/topic/阈值 → 配置；魔法值 → 常量/枚举 | 低-中 |
 | 5 | 分层改造：补齐 service + impl，逻辑下沉；同批补齐 Swagger | 中 |
 | 6 | 目录重组：按业务域 + 类型子目录移动类；`web`→`controller`/`handler`；收敛 `po` | 中 |
 | 7 | 拆分上帝类：按业务域 Extract Class | 中-高 |
 | 8 | 语义命名与格式：方法/参数/变量语义化重命名；分层命名对齐；代码格式统一 | 低-中 |
+| 9 | 公共代码提取、复杂方法拆分复用、循环/条件控制流简化（域内最后） | 低-中 |
 
 执行要求：
 
@@ -107,8 +118,10 @@ description: >-
 | 4 | 业务代码无 URL/IP 字面量（测试与生成代码除外） |
 | 5 | Controller 不注入 Mapper、不做分页；有对外接口的 Controller 有 Swagger 注解 |
 | 6 | 无 Controller 留在 `web` 包；`po` 包只减不增 |
+| 3 | 《重构清单》本批重复项已处理或登记无需求；编译通过 |
 | 7 | 目标上帝类行数下降或有明确拆分记录 |
 | 8 | 无模糊方法名模式；分层命名符合 conventions §6；格式门禁通过 |
+| 9 | 本批 9.1/9.2/9.3 子任务清单已处理；深嵌套/超长方法较基线下降；见 verification-commands §9 |
 
 #### 批次完成定义（DoD）
 
@@ -144,3 +157,4 @@ description: >-
 | [safety-checklist.md](safety-checklist.md) | 前/中/后期检查清单 |
 | [templates/REFACTOR_PROGRESS.md](templates/REFACTOR_PROGRESS.md) | 进度跟踪模板 |
 | [templates/refactor-report.md](templates/refactor-report.md) | 收尾符合度报告模板 |
+| [batch9-reuse-playbook.md](batch9-reuse-playbook.md) | 批 9：公共复用、复杂拆分、循环/判断优化 |
