@@ -1,98 +1,109 @@
 # 坏味道手册：识别方法与处理手法
 
-阶段一摸底扫描时按本文件逐项排查，生成《重构清单》。扫描用 Grep/Glob 工具执行，命令模式仅作参考。
+阶段一摸底扫描时按本文件逐项排查，生成《重构清单》。扫描命令详见 [verification-commands.md](verification-commands.md)；业务域分类见 [domain-taxonomy.md](domain-taxonomy.md)。
 
 ## 1. 上帝类 / 大类
 
-**识别**：统计源文件行数，业务类（Controller/Service）超过约 400 行即列入清单。注意排除代码生成器产物（如 MyBatis Generator 的 `*Example` 类），生成类体积大但模式固定，不算坏味道。
+**识别**：业务类（Controller/Service/Handler）超过约 400 行。排除 MyBatis Generator 的 `*Example` 类。
 
-**处理**：按业务域 Extract Class。先在类内按职责给方法分组（可按注释/前缀判断），每组拆出一个独立 Service，原类保留为门面或直接由调用方改调新类。拆分时警惕循环依赖（见 safety-checklist.md）。
+**处理**：按业务域 Extract Class；B 类聚合域（statis）优先拆 Service。警惕循环依赖（见 safety-checklist.md）。
 
 ## 2. 死代码
 
 **识别**：
 
 - 整文件被注释（有效代码行为 0）
-- 连续 10 行以上的注释代码块（特征：注释里含 `@GetMapping`、`public`、`return` 等代码关键字）
-- 被注释掉的依赖/模块声明（pom.xml、build.gradle 中的注释块）
-- 无任何调用方的 public 方法（全局搜索引用确认）
+- 连续 10 行以上的注释代码块
+- pom/build 中被注释的依赖
+- 无任何调用方的 public 方法
 
-**处理**：**只登记不删除**（红线 5）。登记格式：文件路径 + 行号范围 + 内容摘要 + 疑似废弃原因。全部重构完成后统一向用户逐项提问，确认删除的才删，git 历史天然留底。
+**处理**：**只登记不删除**（红线 5）。格式：文件路径 + 行号 + 摘要 + 疑似原因。收尾时逐项问用户。
 
-**特别注意**：被注释的 `@KafkaListener`、`@Scheduled`、`@EventListener` 等，要先确认该功能是否已迁移到别处，登记时注明。
+**特别注意**：被注释的 `@KafkaListener`、`@Scheduled` 等，确认是否已迁移，登记时注明。
 
 ## 3. 硬编码
 
-**识别**（按模式搜索）：
+**识别**：
 
 | 模式 | 例子 |
 |------|------|
 | IP/URL 字面量 | `"http://10.x.x.x:8080/..."`、`"192.168."` |
-| 账号密码 | `password=`、`username=` 出现在字符串字面量中 |
-| MQ topic / 队列名写死 | `send("topic_name", ...)` |
-| 业务阈值数字 | 超时毫秒数、重试次数、范围边界直接写在逻辑里 |
-| 业务编码裸用 | `direction == 1`、`type.equals("03")` |
+| static host/token | `private static final String host = "..."` |
+| 账号密码 | `password=` 在字符串字面量中 |
+| MQ topic 写死 | `send("topic_name", ...)` |
+| 业务阈值/编码裸用 | `direction == 1`、`type.equals("03")` |
 
-**处理**：环境相关的（IP/URL/topic/账号）外置到配置文件 + 配置类；业务语义的（编码/状态）改常量或枚举。规则见 conventions.md 第 4 节。
+**处理**：环境相关 → 配置 + `@ConfigurationProperties`；业务语义 → 常量/枚举。见 conventions.md 第 4 节。
 
-**注意**：发现明文密码时只做外置或占位符化处理（且需用户确认是否纳入本期范围），不要把密码内容写进任何文档、commit message 或 skill 文件。
+**注意**：明文密码只做外置/占位，不写进文档、commit message 或 skill 文件。
 
 ## 4. 重复代码
 
-**识别**：
+**识别**：相同字符串处理、分页样板、参数校验、Consumer/Handler 反序列化骨架重复。
 
-- 同一字符串处理/转换逻辑多处出现（搜索特征代码片段，如 `replace(" ", "+")`）
-- 分页样板多处重复（如 `PageHelper.startPage(...)` + `new PageInfo<>(...)` 组合）
-- 参数校验样板重复（如 `if (isEmpty(...)) return failed("参数不能为空")`）
-- 多个 Consumer/Handler 中相同的反序列化、异常处理骨架
-
-**处理**：Extract Method → 工具类 → AOP，按复用范围递进。校验类重复优先改用 Bean Validation。
+**处理**：Extract Method → 工具类 → AOP；校验优先 Bean Validation。
 
 ## 5. 职责错位
 
 **识别**：
 
-- Controller 注入 Mapper、MQ Producer、ObjectMapper 等基础设施组件
-- Controller 中出现分页、计算、消息发送等业务逻辑
-- `@Service` 类放在 controller 包、工具类放在业务包等位置错误
-- Service 无接口、调用方直接依赖实现类
+- Controller/Handler 注入 Mapper、MQ Producer
+- Controller/Handler 内分页、计算、发消息
+- `@Service` 在 controller/web 包
+- Service 无接口
 
-**处理**：逻辑下沉到 ServiceImpl；类移动到正确目录；补齐 service 接口。规则见 conventions.md 第 2、3 节。
+**处理**：逻辑下沉 ServiceImpl；补齐接口；类归位。见 conventions.md 第 2 节。
 
 ## 6. 包结构混乱
 
 **识别**：
 
-- 同一职责出现两种包名（如 `web` 与 `controller` 并存）
-- 业务域内文件未按类型分子目录（Consumer、Task、工具类散落在业务包根下）
-- 跨业务域共享的类放在某个具体业务包里
+- `web` 与 `controller` 并存
+- `po`/`bean`/`pojo` 与 `dto`/`vo`/`entity` 混用
+- Consumer/Task/Util 散落在域包根目录
+- 跨域 DTO 堆在 `statis/dto` 等聚合包
 
-**处理**：按 conventions.md 第 3 节的标准结构移动。移动只改 package/import，单独成 commit，移动后全局搜索旧全限定名确认无残留。
+**处理**：按 conventions.md 第 3、8 节和 domain-taxonomy.md 迁移。只改 package/import，单独 commit。
 
 ## 7. 注释不规范
 
-**识别**：类/方法/字段上使用 `//` 或 `/* */` 注释；Javadoc 格式破损；无意义注释。
+**识别**：
 
-**处理**：统一改为 Javadoc `/** xx */`，规则见 conventions.md 第 1 节。此项风险极低，可与死代码登记同批执行。
+- 类/方法/字段用 `//` 或 `/* */`
+- **行尾字段注释** `private T f; // 说明`
+- `@Description`、`@MethodName` 等非标准 Javadoc
+- 类上仅有 `@author` 无职责说明
+
+**处理**：统一 Javadoc。见 conventions.md 第 1 节。风险极低，但**不可跳过**（须过批次 2 门禁）。
 
 ## 8. 接口文档注解缺失/不一致
 
+**识别**：缺 `@Api`/`@Tag`/`@ApiOperation`；DTO 裸字段；注解与行为不符。
+
+**处理**：与批次 5 同批执行；以实际行为为准修文档，不改行为（红线 1）。
+
+## 9. 上帝模块 / 错放 DTO（聚合包）
+
 **识别**：
 
-- Controller 类无 `@Api`/`@Tag`，接口方法无 `@ApiOperation`/`@Operation`
-- 请求参数无含义说明（缺 `@ApiParam`/`@Parameter`），有格式要求却无 example
-- 入参/出参 DTO 存在裸字段（缺 `@ApiModelProperty`/`@Schema`）
-- 注解与实际行为不符：`httpMethod` 与实际请求方法不一致、`required` 标注与 `@RequestParam(required=...)` 矛盾、value/notes 描述的是旧版逻辑
-- 注解内容粗糙：value 与 notes 完全相同、复制粘贴后未改（描述与接口对不上）
+- 单包 `dto/` 超过约 15 个文件且类名跨多个业务前缀（如 statis/dto 含 E1、ETC、B5）
+- ServiceImpl import 来自 5 个以上业务域
+- C 类包（send）含 `static` URL 且无 config 子包
 
-**处理**：按 conventions.md 第 7 节补齐和修正，与分层改造（批次 5）同批执行。修正 `required`/`httpMethod` 等与行为相关的注解时，以**实际代码行为**为准修文档，不得反过来改代码行为（红线 1）。
+**处理**：
+
+1. domain-taxonomy.md 分类
+2. 批次 6：错放 dto 迁回来源域
+3. 批次 4：C 类硬编码外置
+4. 批次 7：大 Service 拆分
 
 ## 输出格式：《重构清单》模板
 
-扫描完成后按此模板输出，与用户确认优先级后再动手：
-
 ```markdown
 # 重构清单
+
+## 零、业务域分类
+| 包名 | 类别(A/B/C/D) | 备注 |
 
 ## 一、死代码（只登记，最后统一确认是否删除）
 | # | 文件 | 位置 | 摘要 | 备注 |
@@ -107,11 +118,19 @@
 | # | 类 | 行数 | 问题 | 拆分/移动建议 |
 
 ## 五、包结构调整
-| # | 现状 | 目标位置 |
+| # | 现状 | 目标位置 | 域分类 |
 
-## 六、接口文档注解问题
-| # | Controller/DTO | 问题类型（缺失/不一致/粗糙） | 建议处理 |
+## 六、错放 DTO（上帝模块）
+| # | 类 | 现位置 | 应迁往 |
 
-## 建议执行批次
-（按 SKILL.md 的批次表排列，标注每批涉及的清单项编号）
+## 七、接口文档注解问题
+| # | Controller/DTO | 问题类型 | 建议处理 |
+
+## 建议执行计划
+- 范围：{用户选择的域}
+- 域顺序：{如 send → b5 → statis}
+- 每域批次：1→2→4→6→5→(3/7)
+- 对应清单项编号：...
 ```
+
+阶段一还需在项目根创建 `REFACTOR_PROGRESS.md`（见 templates/REFACTOR_PROGRESS.md）。
