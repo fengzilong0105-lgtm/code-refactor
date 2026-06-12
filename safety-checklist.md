@@ -20,6 +20,7 @@
 - [ ] 相关测试通过
 - [ ] 对外接口签名与基线一致
 - [ ] **批次门禁已通过**（verification-commands.md）
+- [ ] 批次 8：方法重命名已查 XML/反射；URL 路径未变
 - [ ] `REFACTOR_PROGRESS.md` 已更新（含门禁记录）
 - [ ] 已给出 commit 建议 message；用户要求时代为 commit
 - [ ] 新发现的 bug / 死代码已登记，未顺手修改

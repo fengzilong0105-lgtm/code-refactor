@@ -74,7 +74,7 @@ private int type;
 |------|------|------|
 | 业务编排 Service | `{Domain}Service` / `{Domain}ServiceImpl` | 对外业务能力 |
 | 数据访问 Service（MyBatis-Plus `IService`） | `I{Entity}Service` / `{Entity}ServiceImpl` | 单表 CRUD，可保留 I 前缀 |
-| 规则 | Controller 优先注入业务 `{Domain}Service` | 不直接注入 `IStaXxxService`，除非极简 CRUD 且无编排 |
+| 规则 | Controller 优先注入业务 `{Domain}Service` | 不直接注入单表 CRUD 型 `I{Entity}Service`，除非极简 CRUD 且无编排 |
 
 禁止同一域内新增两套风格并存的业务 Service。
 
@@ -82,18 +82,18 @@ private int type;
 
 ```java
 @RestController
-@RequestMapping("statis")
-public class KakoWebController {
+@RequestMapping("order")
+public class OrderController {
 
     @Autowired
-    private KakoDataService kakoDataService;
+    private OrderService orderService;
 
     /**
-     * 路况设置列表查询
+     * 分页查询订单列表
      */
-    @PostMapping("roadEventList")
-    public ApiR<PageInfo<RoadEventDto>> roadEventList(@RequestBody RoadEventParam param) {
-        return ApiR.ok(kakoDataService.pageRoadEvent(param));
+    @PostMapping("list")
+    public ApiR<PageInfo<OrderDto>> list(@RequestBody OrderQueryParam param) {
+        return ApiR.ok(orderService.pageOrder(param));
     }
 }
 ```
@@ -114,7 +114,7 @@ cn.xxx.{业务域}/
 │   └── impl/          # XxxServiceImpl
 ├── mapper/            # XxxMapper / DAO
 ├── entity/            # 数据库实体（含 Example 类）
-├── dto/               # 接口入参/出参、协议帧对象
+├── dto/               # 接口入参/出参、协议或消息体对象
 ├── vo/                # 视图/展示对象
 ├── consumer/          # XxxConsumer（MQ 消费者）
 ├── producer/          # XxxProducer（MQ 生产者）
@@ -133,7 +133,7 @@ cn.xxx.common/  或  cn.xxx.integration/
 ├── constant/
 ├── util/
 ├── exception/
-└── send/              # 对外 HTTP 推送等集成（见 domain-taxonomy.md C 类）
+└── {outbound}/        # 对外集成子包（C 类，见 domain-taxonomy.md）
 ```
 
 移动规则：
@@ -148,22 +148,22 @@ cn.xxx.common/  或  cn.xxx.integration/
 |------|---------|
 | URL、IP、端口、topic 名、账号 | 外置到配置文件，通过 `@Value` 或 `@ConfigurationProperties` 注入 |
 | 业务阈值（超时、重试次数、范围值） | 外置到配置文件，给出合理默认值 |
-| 业务编码（方向 1/2、车型编码、状态码） | 常量类或枚举，命名表达业义 |
+| 业务编码（状态码、类型码、枚举值） | 常量类或枚举，命名表达业义 |
 | 重复出现的字符串字面量 | 常量 |
 
 配置类放在 `{域}/config/` 或 `common/config/`，禁止在 Service/Util 中用 `static final` 硬编码 URL。
 
 ```java
 /**
- * 相机代理服务配置
+ * 第三方服务连接配置
  */
 @Component
-@ConfigurationProperties(prefix = "camera.proxy")
-public class CameraProxyProperties {
-    /** 代理保存地址 */
-    private String saveUrl;
-    /** 登录地址 */
-    private String loginUrl;
+@ConfigurationProperties(prefix = "integration.partner")
+public class PartnerApiProperties {
+    /** 服务根地址 */
+    private String baseUrl;
+    /** 认证令牌 */
+    private String accessToken;
 }
 ```
 
@@ -175,12 +175,82 @@ public class CameraProxyProperties {
 - 抽取后的工具方法必须有 Javadoc，放在所属域的 `util/` 或 `common/util/`。
 - Controller 中重复的参数校验，优先 Bean Validation（`@NotNull` + `@Validated`）。
 
-## 6. 命名规范
+## 6. 命名规范（类 / 方法 / 参数）
 
-- 类名：`XxxController` / `XxxHandler` / `XxxService` / `XxxServiceImpl` / `XxxMapper` / `XxxConsumer` / `XxxTask` / `XxxProperties`。
-- 方法名：查询 `get/list/page/count`，写入 `save/update/remove`。
-- 常量全大写下划线；枚举 `XxxEnum` 或业务名。
-- 常量类放 `{域}/constant/`，避免散落在域包根目录（历史 `XxxContant` 改造时迁入）。
+命名目标：**读名知义、分层一致、技术化表达业务意图**。禁止模糊词堆砌与无意义缩写。
+
+### 6.1 类命名
+
+| 层级 | 格式 | 示例 |
+|------|------|------|
+| Controller | `{业务}Controller` | `OrderController` |
+| Service 接口 | `{业务}Service` | `OrderService` |
+| ServiceImpl | `{业务}ServiceImpl` | `OrderServiceImpl` |
+| Mapper | `{实体}Mapper` | `OrderMapper` |
+| Handler / Consumer | `{协议或场景}{Handler\|Consumer}` | `PaymentNotifyHandler` |
+
+- 常量类放 `{域}/constant/`；枚举 `XxxEnum` 或业务语义名。
+- 禁止：`XxxService1`、`TempController`、`CommonService`（无业务范围时）。
+
+### 6.2 分层方法动词（必须遵守）
+
+| 层级 | 允许动词前缀 | 禁止 / 慎用 |
+|------|--------------|-------------|
+| **Controller** | 与对外接口语义一致，可用业务短名 | `do`、`handle`、`process`、`deal`、`execute`（无宾语时） |
+| **Service** | `get`/`find`/`list`/`page`/`count`/`save`/`create`/`update`/`remove`/`delete`/`cancel`/`submit`/`sync`/`export`/`import`/`validate`/`build`/`convert` | `doXxx`、`handleXxx`、`processData`、`getData`、`query`（单独作动词时） |
+| **ServiceImpl** | 与接口一致；私有方法用完整动宾：`buildXxx`、`convertToXxx`、`loadXxxById` | `method1`、`temp`、`test`、`aaa` |
+| **Mapper** | `select`/`insert`/`update`/`delete`/`count` + `By{条件}` | `get`、`find`、`query`（与 MyBatis 惯例不一致时统一为本表） |
+
+**查询方法语义区分**：
+
+| 场景 | 命名 | 返回 |
+|------|------|------|
+| 单条 | `get{Entity}ById` / `find{Entity}By{UniqueKey}` | 单对象，可能 null |
+| 列表 | `list{Entity}By{条件}` | `List`，不分页 |
+| 分页 | `page{Entity}` / `page{Entity}By{条件}` | `PageInfo` / `IPage` 等 |
+| 统计 | `count{Entity}By{条件}` | 数值 |
+| 存在性 | `exists{Entity}By{条件}` | `boolean` |
+
+**写入方法**：`create`/`save`（新增）、`update`（按 id 更新）、`remove`/`delete`（删除）；批量加 `Batch` 后缀。
+
+### 6.3 意义不明命名的识别与改写
+
+阶段一/批次 8 扫描以下模式，**有则必改**（除非登记为例外）：
+
+| 坏命名 | 问题 | 改写思路 |
+|--------|------|----------|
+| `do`、`handle`、`process`、`deal` | 无业务语义 | 换为具体动词 + 宾语 |
+| `getData`、`queryData`、`selectData` | Data 无类型 | `listOrderByStatus` |
+| `method1`、`fun`、`calc`、`opt` | 临时/随意 | 按实际逻辑命名 |
+| `b5`、`e1`、`submit`（无宾语） | 协议号/缩写代替语义 | `submitTrafficEvent` |
+| `getInfo`、`getDetail`（无实体） | Info/Detail 泛指 | `getOrderDetail` |
+| 拼音、拼音缩写 | 非技术化 | 英文业务术语 |
+| 单字母参数（除 `id`/`i`/`j` 循环） | 可读性差 | `orderId`、`startTime` |
+
+改写流程（批次 8）：
+
+1. 读方法体，用**一句业务话**概括职责 → 作为目标方法名。
+2. 全局搜索旧方法名 + MyBatis XML `id` + 反射字符串。
+3. 先改 Service 接口，再改 Impl、Controller、Mapper、XML，**同一次提交内完成**。
+4. 同步更新方法 Javadoc 与 Swagger `value/summary`（仅文案对齐，URL 不变）。
+
+### 6.4 重命名安全边界（红线补充）
+
+| 可改名 | 不可改（除非用户确认） |
+|--------|------------------------|
+| Java 方法名（Controller 的 `@RequestMapping` **路径**不变） | URL 路径、HTTP 方法 |
+| 私有 / 包内方法 | 对外 Feign/Dubbo 接口方法名 |
+| Service 接口方法（同步改所有实现与调用方） | JSON 字段名、MQ 消息体字段 |
+| Mapper 方法 + XML 中对应 `id` | 数据库列名（本期重构不动） |
+| 局部变量、参数名 | 配置 key、序列化 `@JsonProperty` 显式名 |
+
+### 6.5 参数与变量命名
+
+- 参数：`camelCase`，表达含义：`orderId` 非 `id`（除非上下文唯一）。
+- 集合：`orderList`、`userIds`；Map：`userIdToNameMap`。
+- 布尔：`is`/`has`/`can` 前缀：`isPaid`、`hasPermission`。
+- 时间：`startTime`/`endTime`（`Date`/`LocalDateTime` 一致）；禁止 `time1`/`date2`。
+- 禁止魔法字符串参数；重复字面量提常量。
 
 ## 7. 接口文档（Swagger/OpenAPI）规范
 
@@ -201,7 +271,7 @@ public class CameraProxyProperties {
 
 | 现状包名 | 判断依据 | 迁移目标 |
 |----------|----------|----------|
-| `po/*FramePo`、`*FrameVo` | 协议帧解析，无 DB 表 | `{域}/dto/` 或 `{域}/frame/` |
+| `po/*MessagePo`、`*ProtocolDto` 等 | 协议/消息体解析，无 DB 表 | `{域}/dto/` 或 `{域}/message/` |
 | `po/*Dto`、`*Param` | 接口入参/出参 | `{域}/dto/` |
 | `po/*Vo`、展示聚合对象 | 前端/大屏展示 | `{域}/vo/` |
 | `po/*` 且被 `@TableName`/Mapper 使用 | DB 实体 | `{域}/entity/` |
@@ -211,9 +281,51 @@ public class CameraProxyProperties {
 
 - 迁移后**禁止在新代码中使用** `po`/`bean`/`pojo` 包名。
 - 类名后缀与目录尽量一致：`vo/` 下以 `Vo` 结尾；历史例外登记清单，不强制改名。
-- 属于单一业务来源的类（如 `E1ToSimuTestDto` 放在 `statis/dto`）必须迁回来源域。
+- 属于单一 A 类核心域的类（却放在 B 类聚合包或他域 `dto/` 下）必须迁回来源域。判定规则见 [domain-taxonomy.md](domain-taxonomy.md) 第三节。
 
-## 9. 技术约束（域内统一，单次不强制全项目）
+## 9. 代码格式规范
+
+批次 8 在单域内统一格式，**不改变逻辑**。优先遵循项目已有风格（`.editorconfig`、Checkstyle、Spotless、`spring-javaformat`）；无配置时采用下列默认标准。
+
+### 9.1 布局与换行
+
+- 缩进：4 空格（或项目已用 2 空格则本域统一 2）。
+- 行宽：建议 ≤ 120 字符；超长参数列表纵向换行，每行一个参数。
+- 大括号：K&R 风格（左括号不换行），`if/for` 即使单行也建议保留大括号（与项目现状冲突时本域内统一）。
+- 空行：类成员之间 1 空行；方法之间 1 空行；逻辑块之间可 1 空行，禁止连续 3 行以上空行。
+
+### 9.2 import 与声明顺序
+
+```
+package → import（java → javax → 第三方 → 本项目，各组之间空行）→ 类 Javadoc → 类声明
+```
+
+- 禁止 `import xxx.*` 通配符（除非项目惯例允许）。
+- 删除未使用 import。
+
+### 9.3 类内成员顺序（推荐）
+
+```
+常量 → 字段 → 构造器 → 公共方法 → 受保护方法 → 私有方法 → 内部类
+```
+
+同类方法：查询 → 写入 → 转换/工具私有方法。
+
+### 9.4 表达式与链式调用
+
+- 链式调用每个 `.` 一行或合理断行，避免单行过长。
+- 禁止无意义括号、多余分号、尾随空格。
+- 字符串拼接优先 `String.format` 或文本块；简单场景用 `+` 可接受。
+
+### 9.5 格式化执行方式
+
+1. 有 Spotless/formatter Maven 插件 → 对本域执行 `mvn spotless:apply`（或项目等价命令）。
+2. 有 IDE 配置 → 对改动文件执行 Format。
+3. 均无 → 手工按本节统一，并在 `REFACTOR_PROGRESS.md` 注明「本域采用默认格式规范」。
+
+格式改动**单独或与命名同批**，不与逻辑修改混在同一方法内。
+
+## 10. 技术约束（域内统一，单次不强制全项目）
 
 在不变更行为前提下，改造涉及的类顺带统一：
 

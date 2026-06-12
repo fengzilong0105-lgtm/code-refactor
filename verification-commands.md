@@ -5,8 +5,8 @@
 变量说明（执行前替换）：
 
 - `{MODULE}`：Maven 模块路径，如 `server-road/road_control`
-- `{DOMAIN}`：业务域包路径片段，如 `cn/net/wanji/b5`
-- `{JAVA_ROOT}`：Java 源码根，如 `server-road/road_control/src/main/java`
+- `{DOMAIN}`：当前业务域包路径片段，如 `com/example/order`（按项目实际 base package）
+- `{JAVA_ROOT}`：Java 源码根，如 `src/main/java` 或 `{module}/src/main/java`
 
 工具：优先用 IDE Grep；命令行可用 `rg`（ripgrep）。
 
@@ -155,6 +155,50 @@ rg "^package .+\.(bean|pojo);" --glob "*.java" {JAVA_ROOT}/{DOMAIN}
 
 ---
 
+## 批次 8：语义命名与格式
+
+### 8.1 模糊方法名（controller / service / mapper）
+
+```bash
+rg "\b(do|handle|process|deal|getData|queryData|execute)\s*\(" --glob "*.java" {JAVA_ROOT}/{DOMAIN}
+rg "\b(method|fun|temp|test)\d*\s*\(" --glob "*.java" {JAVA_ROOT}/{DOMAIN}
+```
+
+**通过标准**：无匹配，或每一项已在《重构清单》登记为例外并注明原因。
+
+### 8.2 Mapper 动词不规范
+
+```bash
+rg "^\s+(get|find|query)\w*\s*\(" --glob "**/mapper/**/*.java" {JAVA_ROOT}/{DOMAIN}
+```
+
+**通过标准**：无匹配，或已统一改为 `select/insert/update/delete/count` 前缀。
+
+### 8.3 通配符 import
+
+```bash
+rg "^import .+\.\*;" --glob "*.java" {JAVA_ROOT}/{DOMAIN}
+```
+
+**通过标准**：无匹配（或符合项目惯例且本域一致）。
+
+### 8.4 重命名引用残留
+
+重命名后执行：
+
+```bash
+rg "{旧方法名}" --glob "*.{java,xml}" {MODULE}
+```
+
+**通过标准**：无残留（测试类同步修改除外）。
+
+### 8.5 格式
+
+- 已执行项目 formatter / `spotless:apply`，或
+- 人工确认本域缩进、import 顺序、成员顺序符合 conventions.md §9。
+
+---
+
 ## 批次 7：上帝类
 
 ```bash
@@ -179,6 +223,7 @@ Get-ChildItem -Recurse -Filter "*.java" {JAVA_ROOT}/{DOMAIN} |
 | po 包类总数 | `rg -c "^package .+\.po;" --glob "*.java" {JAVA_ROOT}` |
 | 硬编码 URL 总数 | `rg "https?://\d" --glob "*.java" {JAVA_ROOT}` |
 | Controller 注 Mapper | `rg "Mapper" --glob "**/controller/**/*.java" {JAVA_ROOT}` |
+| 模糊方法名残留 | `rg "\b(do|handle|process|getData)\s*\(" --glob "**/{controller,service,mapper}/**/*.java" {JAVA_ROOT}` |
 
 结果填入 [templates/refactor-report.md](templates/refactor-report.md)。
 
@@ -190,6 +235,6 @@ Get-ChildItem -Recurse -Filter "*.java" {JAVA_ROOT}/{DOMAIN} |
 ### 门禁：{域名} - 批次{N} - {日期}
 - 命令：4.1 URL/IP
 - 结果：未通过 3 项
-- 文件：send/service/EventSendService.java, ...
+- 文件：{integration}/service/XxxOutboundService.java, ...
 - 处理：继续批次 4，已修复 0/3
 ```

@@ -6,7 +6,7 @@
 
 **识别**：业务类（Controller/Service/Handler）超过约 400 行。排除 MyBatis Generator 的 `*Example` 类。
 
-**处理**：按业务域 Extract Class；B 类聚合域（statis）优先拆 Service。警惕循环依赖（见 safety-checklist.md）。
+**处理**：按业务域 Extract Class；B 类聚合域优先拆 Service。警惕循环依赖（见 safety-checklist.md）。
 
 ## 2. 死代码
 
@@ -61,7 +61,7 @@
 - `web` 与 `controller` 并存
 - `po`/`bean`/`pojo` 与 `dto`/`vo`/`entity` 混用
 - Consumer/Task/Util 散落在域包根目录
-- 跨域 DTO 堆在 `statis/dto` 等聚合包
+- 跨域 DTO 堆在 B 类聚合包（如 `report/dto`、`dashboard/dto`）
 
 **处理**：按 conventions.md 第 3、8 节和 domain-taxonomy.md 迁移。只改 package/import，单独 commit。
 
@@ -82,11 +82,35 @@
 
 **处理**：与批次 5 同批执行；以实际行为为准修文档，不改行为（红线 1）。
 
-## 9. 上帝模块 / 错放 DTO（聚合包）
+## 9. 语义不清的命名 / 非标准格式
 
 **识别**：
 
-- 单包 `dto/` 超过约 15 个文件且类名跨多个业务前缀（如 statis/dto 含 E1、ETC、B5）
+| 类型 | 扫描模式 / 特征 |
+|------|-----------------|
+| 模糊方法名 | `do`、`handle`、`process`、`getData`、`queryData`、`method\d+` |
+| 无宾语缩写 | 方法名仅为协议号、单动词（`submit`、`save` 无实体） |
+| 分层动词混用 | Mapper 用 `get`；Controller 名与 Service 动词风格不一致 |
+| 拼音命名 | 类/方法/参数含拼音 |
+| 格式混乱 | 通配符 import、尾随空格、成员顺序杂乱、缩进不一致 |
+
+```bash
+rg "\b(do|handle|process|deal|getData|queryData|method\d+)\s*\(" --glob "**/{controller,service,mapper}/**/*.java" {JAVA_ROOT}/{DOMAIN}
+rg "void\s+(test|temp|fun)\d*\s*\(" --glob "*.java" {JAVA_ROOT}/{DOMAIN}
+```
+
+**处理**（批次 8，见 conventions.md 第 6、9 节）：
+
+1. 为每个坏命名写清「一句业务描述」→ 目标方法名。
+2. 全局替换 + MyBatis XML `id` 同步。
+3. 本域内统一格式（formatter 或默认规范）。
+4. 无法从代码推断语义 → 登记《重构清单》并用 AskQuestion 向用户确认，**禁止猜测后乱改**。
+
+## 10. 上帝模块 / 错放 DTO（聚合包）
+
+**识别**：
+
+- 单包 `dto/` 超过约 15 个文件且类型明显分属多个 A 类核心域
 - ServiceImpl import 来自 5 个以上业务域
 - C 类包（send）含 `static` URL 且无 config 子包
 
@@ -126,10 +150,13 @@
 ## 七、接口文档注解问题
 | # | Controller/DTO | 问题类型 | 建议处理 |
 
+## 八、语义命名 / 格式问题
+| # | 类 | 方法/成员 | 问题 | 建议新名 |
+
 ## 建议执行计划
 - 范围：{用户选择的域}
-- 域顺序：{如 send → b5 → statis}
-- 每域批次：1→2→4→6→5→(3/7)
+- 域顺序：{按 domain-taxonomy.md 五类顺序填写实际包名，如 integration → order → report}
+- 每域批次：1→2→4→6→5→8→(3/7)
 - 对应清单项编号：...
 ```
 
